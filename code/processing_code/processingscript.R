@@ -23,7 +23,7 @@ rawdata <- RSocrata::read.socrata(data_link)
 
 # Looks like all of our data has been imported as character type, so we have
 # a little bit of fixing to do before we can even get started look for issues.
-dat1 <- rawdata |>
+dat1 <- rawdata %>%
   # First, let's deal with the two columns that represent numeric data
   # I want to explicitly recode the missing values as R's "NA" value
   dplyr::mutate(
@@ -37,7 +37,7 @@ dat1 <- rawdata |>
     ),
     # In the CI column, there are "NA" strings that should be actual NA values
     X_95_ci = dplyr::na_if(X_95_ci, "NA")
-  ) |>
+  ) %>%
   # Next, I want to separate the CI column into two columns. The CI should be
   # split into two columns at the " to ", which can be thrown away. The result
   # here should be two character columns that are coercible to numeric type.
@@ -45,7 +45,7 @@ dat1 <- rawdata |>
     col = X_95_ci,
     into = c("coverage_ci_lwr", "coverage_ci_upr"),
     sep = " to "
-  ) |>
+  ) %>%
   # Now I want to coerce all three of these columns into numeric values. Using
   # the parse_number function allows for handling of some weird situations and
   # will warn us if something in the column isn't a number. If nothing weird
@@ -69,9 +69,9 @@ dat1 <- rawdata |>
 #  a separate step.
 # Let's do the simple conversions (everything except date and dimension) first.
 
-dat2 <- dat1 |>
+dat2 <- dat1 %>%
   # filter for seasonal vaccine only
-  dplyr::filter(vaccine == "Seasonal Influenza") |>
+  dplyr::filter(vaccine == "Seasonal Influenza") %>%
   # type castings that don't need other work
   dplyr::mutate(
     geography_type = as.factor(geography_type),
@@ -88,7 +88,7 @@ dat2 <- dat1 |>
 #  the norm for flu data, but it is not technically in the documentation, so it
 #  is an assumption.
 
-dat3 <- dat2 |>
+dat3 <- dat2 %>%
   dplyr::mutate(
     # First, get the year based on month and season
     year = dplyr::if_else(
@@ -119,13 +119,13 @@ dat3 <- dat2 |>
 # cleaning up the rest is really just a pain and I don't need to do it for this
 # exercise.
 
-dat4 <- dat3 |>
+dat4 <- dat3 %>%
   dplyr::filter(
     # I think the easiest way to get only states is to filter by the FIPS codes
     # which are for states (have 2 digits)
     nchar(fips) == 2,
     dimension_type == "Age"
-  ) |>
+  ) %>%
   # now that there should only be 51 levels, let's make geography a factor
   dplyr::mutate(
     geography = factor(geography)
@@ -133,13 +133,13 @@ dat4 <- dat3 |>
 
 # Now we can actually pivot the dimension column, and it won't be too much of
 # a pain to clean up.
-dat5 <- dat4 |>
+dat5 <- dat4 %>%
   # Each row is distinct, but we don't have a superkey, so we need to create
   # a simple one. If we don't, there will be issues with places NA for all
   # age groups getting turned into list columns in the next step.
   dplyr::mutate(
     r_id = row_number()
-  ) |>
+  ) %>%
   # Now pivot the dimension data so we get an age column.
   tidyr::pivot_wider(
     names_from = dimension_type,
@@ -156,22 +156,22 @@ age_groups <- c("6 Months - 4 Years",
                 "18-64 Years",
                 ">= 65 Years")
 
-dat6 <- dat5 |>
+dat6 <- dat5 %>%
   # filter for only the listed age groups
-  filter(Age %in% age_groups) |>
+  filter(Age %in% age_groups) %>%
   # make age an ordered factor
   dplyr::mutate(
     Age = factor(Age, ordered = TRUE, levels = age_groups)
   )
 
-clean_dat <- dat6 |>
+clean_dat <- dat6 %>%
   # rename Age to age for consistency.
   # also rename geography to state.
   dplyr::rename(
     age = Age,
     state = geography,
     flu_season = year_season
-  ) |>
+  ) %>%
   # get rid of redundant/unnecessary vars
   dplyr::select(
     !c(fips, r_id, geography_type, vaccine)
